@@ -1,0 +1,985 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>AI Website Builder</title>
+
+  <!-- Tailwind (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    /* CRITICAL FIX #3: Mobile view using 100dvh so footer input never hides */
+    body {
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Nice scrollbars (optional) */
+    .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(100,116,139,.35); border-radius: 999px; }
+    .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+
+    /* Prevent iOS overscroll bounce from hiding fixed areas */
+    html, body { overscroll-behavior: none; }
+
+    /* Smooth code rendering */
+    pre, code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+  </style>
+</head>
+
+<body class="bg-slate-950 text-slate-100">
+  <!-- App Shell -->
+  <div class="flex flex-1 min-h-0">
+    <!-- Sidebar -->
+    <aside class="w-72 max-w-[80vw] bg-slate-900/60 border-r border-slate-800 flex flex-col min-h-0">
+      <!-- Top: New Project -->
+      <div class="p-4 border-b border-slate-800">
+        <button id="btnNewProject"
+          class="w-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 transition text-white font-semibold rounded-xl px-4 py-2 shadow">
+          + New Project
+        </button>
+      </div>
+
+      <!-- Middle: Project List (Scrollable) -->
+      <div class="flex-1 min-h-0 p-3">
+        <div class="text-xs uppercase tracking-wider text-slate-400 px-2 pb-2">Projects</div>
+        <div id="projectList" class="min-h-0 overflow-auto scrollbar-thin pr-1 space-y-1">
+          <!-- items injected -->
+        </div>
+      </div>
+
+      <!-- Bottom: Settings Gear (Fixed at bottom) -->
+      <div class="p-3 border-t border-slate-800">
+        <button id="btnOpenSettings"
+          class="w-full flex items-center justify-center gap-2 rounded-xl px-3 py-2 bg-slate-800 hover:bg-slate-700 active:bg-slate-900 transition">
+          <span aria-hidden="true">⚙️</span>
+          <span class="text-sm font-medium">Settings</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 min-w-0 flex flex-col min-h-0">
+      <!-- Header -->
+      <header class="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-800 bg-slate-950/60 backdrop-blur">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="flex items-center gap-2 select-none">
+            <span title="Close" aria-hidden="true">🔴</span>
+            <span title="Minimize" aria-hidden="true">🟡</span>
+            <span title="Maximize" aria-hidden="true">🟢</span>
+          </div>
+          <div class="min-w-0">
+            <div id="currentProjectTitle" class="font-semibold truncate">AI Website Builder</div>
+            <div id="currentProjectMeta" class="text-xs text-slate-400 truncate">Build a single-file site with AI</div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <!-- Toggle Buttons -->
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-1 flex items-center">
+            <button id="btnModePreview"
+              class="px-3 py-1.5 rounded-lg text-sm font-semibold transition">
+              Preview
+            </button>
+            <button id="btnModeCode"
+              class="px-3 py-1.5 rounded-lg text-sm font-semibold transition">
+              Code
+            </button>
+          </div>
+
+          <!-- Download Button -->
+          <button id="btnDownload"
+            class="rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 transition px-4 py-2 font-semibold text-sm shadow">
+            Download index.html
+          </button>
+        </div>
+      </header>
+
+      <!-- Content Area -->
+      <section class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-0">
+        <!-- Chat + Status (left pane on large screens) -->
+        <div class="min-h-0 flex flex-col border-b lg:border-b-0 lg:border-r border-slate-800">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950/40">
+            <div class="text-sm font-semibold">Chat</div>
+            <div class="flex items-center gap-2">
+              <span id="statusDot" class="inline-block w-2.5 h-2.5 rounded-full bg-slate-600"></span>
+              <span id="statusText" class="text-xs text-slate-400">Idle</span>
+            </div>
+          </div>
+
+          <div id="chatLog" class="flex-1 min-h-0 overflow-auto scrollbar-thin px-4 py-4 space-y-4">
+            <!-- messages injected -->
+          </div>
+
+          <div class="px-4 py-3 border-t border-slate-800 bg-slate-950/40">
+            <div class="text-xs text-slate-400">
+              Tip: Ask for layout changes, new sections, forms, animations, or copy tweaks. The assistant will return raw HTML only.
+            </div>
+          </div>
+        </div>
+
+        <!-- Output Pane (preview or code) -->
+        <div class="min-h-0 flex flex-col">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950/40">
+            <div class="text-sm font-semibold">Output</div>
+            <div class="flex items-center gap-2 text-xs text-slate-400">
+              <span id="modeLabel">Preview</span>
+            </div>
+          </div>
+
+          <!-- Preview -->
+          <div id="previewWrap" class="flex-1 min-h-0 bg-slate-950">
+            <iframe id="previewFrame" title="Preview"
+              class="w-full h-full bg-white rounded-none border-0"></iframe>
+          </div>
+
+          <!-- Code -->
+          <div id="codeWrap" class="hidden flex-1 min-h-0 bg-slate-950">
+            <div class="flex-1 min-h-0 overflow-auto scrollbar-thin">
+              <pre class="p-4 text-xs leading-relaxed"><code id="codeBlock" class="whitespace-pre"></code></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Footer (Input Bar) -->
+  <footer class="border-t border-slate-800 bg-slate-950/70 backdrop-blur px-3 py-3 flex-shrink-0">
+    <div class="max-w-screen-2xl mx-auto flex items-end gap-2">
+      <div class="flex-1">
+        <label class="sr-only" for="userInput">Message</label>
+        <textarea id="userInput" rows="2"
+          class="w-full resize-none rounded-xl bg-slate-900 border border-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 text-slate-100 placeholder:text-slate-500 px-3 py-2 leading-snug"
+          placeholder="Describe the website you want… (Shift+Enter for newline, Enter to send)"></textarea>
+        <div class="flex items-center justify-between mt-1 px-1">
+          <span id="charHint" class="text-xs text-slate-500">Enter to send • Shift+Enter for newline</span>
+          <span id="tokenHint" class="text-xs text-slate-500"></span>
+        </div>
+      </div>
+
+      <button id="btnSend"
+        class="rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 transition px-4 py-2 font-semibold shadow whitespace-nowrap">
+        Send
+      </button>
+    </div>
+  </footer>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/60"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="w-full max-w-lg rounded-2xl bg-slate-950 border border-slate-800 shadow-2xl overflow-hidden">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+          <div class="font-semibold">Settings</div>
+          <button id="btnCloseSettings" class="rounded-lg px-2 py-1 hover:bg-slate-800 transition" aria-label="Close settings">✕</button>
+        </div>
+
+        <div class="p-5 space-y-4">
+          <div>
+            <label class="block text-sm font-semibold mb-1" for="settingApiUrl">API URL</label>
+            <input id="settingApiUrl" type="text"
+              class="w-full rounded-xl bg-slate-900 border border-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 px-3 py-2"
+              placeholder="https://openrouter.ai/api/v1/chat/completions" />
+            <p class="text-xs text-slate-400 mt-1">Default is OpenRouter chat completions endpoint.</p>
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold mb-1" for="settingApiKey">API Key</label>
+            <input id="settingApiKey" type="password"
+              class="w-full rounded-xl bg-slate-900 border border-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 px-3 py-2"
+              placeholder="sk-or-..." />
+            <p class="text-xs text-slate-400 mt-1">Stored locally in your browser (localStorage).</p>
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold mb-1" for="settingModelId">Model ID</label>
+            <input id="settingModelId" type="text"
+              class="w-full rounded-xl bg-slate-900 border border-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 px-3 py-2"
+              placeholder="deepseek/deepseek-r1:free" />
+            <p class="text-xs text-slate-400 mt-1">Example: <code class="text-slate-200">deepseek/deepseek-r1:free</code></p>
+          </div>
+
+          <div class="pt-2 flex items-center justify-between gap-2">
+            <button id="btnResetSettings"
+              class="rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-900 transition px-4 py-2 font-semibold">
+              Reset Defaults
+            </button>
+            <div class="flex items-center gap-2">
+              <button id="btnCancelSettings"
+                class="rounded-xl bg-slate-900 hover:bg-slate-800 active:bg-slate-950 transition px-4 py-2 font-semibold">
+                Cancel
+              </button>
+              <button id="btnSaveSettings"
+                class="rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 transition px-4 py-2 font-semibold shadow">
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="px-5 py-3 border-t border-slate-800 text-xs text-slate-400">
+          Security note: Never paste secrets on shared machines. This app stores settings in localStorage.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /***********************
+     * CRITICAL REQUIREMENTS
+     ***********************/
+    // CRITICAL FIX #1: Force OpenRouter Endpoint default (DO NOT USE OpenAI URL)
+    const DEFAULT_API_URL = "https://openrouter.ai/api/v1/chat/completions";
+    const DEFAULT_MODEL_ID = "deepseek/deepseek-r1:free";
+
+    // SYSTEM LOGIC: hidden system prompt constant
+    const SYSTEM_PROMPT = "You are a web developer. Output ONLY raw HTML code. No markdown fences. No explanations. Return a complete single-file index.html. Use Tailwind CSS via CDN when needed. Do not include any other text.";
+
+    /***********************
+     * Local Storage Keys
+     ***********************/
+    const LS_KEY = "ai_website_builder_v1";
+
+    /***********************
+     * State
+     ***********************/
+    /** @type {{settings:{apiUrl:string, apiKey:string, modelId:string}, projects:Array<any>, activeProjectId:string, ui:{mode:"preview"|"code"}}} */
+    let state = {
+      settings: {
+        apiUrl: DEFAULT_API_URL,
+        apiKey: "",
+        modelId: DEFAULT_MODEL_ID
+      },
+      projects: [],
+      activeProjectId: "",
+      ui: { mode: "preview" }
+    };
+
+    /***********************
+     * DOM
+     ***********************/
+    const el = {
+      btnNewProject: document.getElementById("btnNewProject"),
+      projectList: document.getElementById("projectList"),
+      currentProjectTitle: document.getElementById("currentProjectTitle"),
+      currentProjectMeta: document.getElementById("currentProjectMeta"),
+      chatLog: document.getElementById("chatLog"),
+      previewWrap: document.getElementById("previewWrap"),
+      previewFrame: document.getElementById("previewFrame"),
+      codeWrap: document.getElementById("codeWrap"),
+      codeBlock: document.getElementById("codeBlock"),
+      btnModePreview: document.getElementById("btnModePreview"),
+      btnModeCode: document.getElementById("btnModeCode"),
+      modeLabel: document.getElementById("modeLabel"),
+      btnDownload: document.getElementById("btnDownload"),
+      userInput: document.getElementById("userInput"),
+      btnSend: document.getElementById("btnSend"),
+      statusDot: document.getElementById("statusDot"),
+      statusText: document.getElementById("statusText"),
+      tokenHint: document.getElementById("tokenHint"),
+
+      settingsModal: document.getElementById("settingsModal"),
+      btnOpenSettings: document.getElementById("btnOpenSettings"),
+      btnCloseSettings: document.getElementById("btnCloseSettings"),
+      btnCancelSettings: document.getElementById("btnCancelSettings"),
+      btnSaveSettings: document.getElementById("btnSaveSettings"),
+      btnResetSettings: document.getElementById("btnResetSettings"),
+
+      settingApiUrl: document.getElementById("settingApiUrl"),
+      settingApiKey: document.getElementById("settingApiKey"),
+      settingModelId: document.getElementById("settingModelId")
+    };
+
+    /***********************
+     * Utils
+     ***********************/
+    function uid() {
+      return Math.random().toString(16).slice(2) + Date.now().toString(16);
+    }
+
+    function nowIso() {
+      return new Date().toISOString();
+    }
+
+    function clampText(s, n) {
+      const t = String(s ?? "");
+      return t.length > n ? t.slice(0, n - 1) + "…" : t;
+    }
+
+    function safeJsonParse(str) {
+      try { return JSON.parse(str); } catch { return null; }
+    }
+
+    function setStatus(kind, text) {
+      // kind: idle | working | error | ok
+      const map = {
+        idle: "bg-slate-600",
+        working: "bg-blue-500",
+        ok: "bg-emerald-500",
+        error: "bg-rose-500"
+      };
+      el.statusDot.className = "inline-block w-2.5 h-2.5 rounded-full " + (map[kind] || map.idle);
+      el.statusText.textContent = text || (kind === "working" ? "Working…" : "Idle");
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function stripMarkdownFences(raw) {
+      // If the model accidentally returns ```html ...```, remove fences.
+      let s = String(raw ?? "").trim();
+      if (s.startsWith("```")) {
+        // remove first line fence
+        s = s.replace(/^```[a-zA-Z]*\n?/, "");
+        // remove ending fence
+        s = s.replace(/```$/, "").trim();
+      }
+      return s;
+    }
+
+    function ensureHtmlDoc(html) {
+      const s = String(html ?? "").trim();
+      if (!s) return "";
+      // If it doesn't look like a full doc, wrap minimally.
+      const hasHtml = /<html[\s>]/i.test(s);
+      const hasDoctype = /<!doctype\s+html>/i.test(s);
+      if (hasHtml && hasDoctype) return s;
+      return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Generated Site</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen">
+${s}
+</body>
+</html>`;
+    }
+
+    function downloadText(filename, text) {
+      const blob = new Blob([text], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    /***********************
+     * Persistence
+     ***********************/
+    function loadState() {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return false;
+      const parsed = safeJsonParse(raw);
+      if (!parsed || typeof parsed !== "object") return false;
+
+      // Merge conservatively with defaults to avoid crashes on schema changes
+      state.settings.apiUrl = (parsed.settings && typeof parsed.settings.apiUrl === "string") ? parsed.settings.apiUrl : DEFAULT_API_URL;
+      state.settings.apiKey = (parsed.settings && typeof parsed.settings.apiKey === "string") ? parsed.settings.apiKey : "";
+      state.settings.modelId = (parsed.settings && typeof parsed.settings.modelId === "string") ? parsed.settings.modelId : DEFAULT_MODEL_ID;
+
+      state.projects = Array.isArray(parsed.projects) ? parsed.projects : [];
+      state.activeProjectId = (typeof parsed.activeProjectId === "string") ? parsed.activeProjectId : "";
+      state.ui.mode = (parsed.ui && (parsed.ui.mode === "preview" || parsed.ui.mode === "code")) ? parsed.ui.mode : "preview";
+
+      // Safety: Ensure defaults for project fields
+      for (const p of state.projects) {
+        if (!p.id) p.id = uid();
+        if (!p.name) p.name = "Untitled Project";
+        if (!Array.isArray(p.messages)) p.messages = [];
+        if (typeof p.html !== "string") p.html = "";
+        if (!p.createdAt) p.createdAt = nowIso();
+        if (!p.updatedAt) p.updatedAt = nowIso();
+      }
+
+      return true;
+    }
+
+    function saveState() {
+      localStorage.setItem(LS_KEY, JSON.stringify(state));
+    }
+
+    /***********************
+     * Projects
+     ***********************/
+    function createNewProject({ name } = {}) {
+      const id = uid();
+      const project = {
+        id,
+        name: name || `Project ${state.projects.length + 1}`,
+        createdAt: nowIso(),
+        updatedAt: nowIso(),
+        messages: [
+          {
+            role: "assistant",
+            content: "Hi! Describe the website you want. I will output a complete single-file index.html.",
+            ts: nowIso()
+          }
+        ],
+        html: ""
+      };
+      state.projects.unshift(project);
+      state.activeProjectId = id;
+      saveState();
+      renderAll();
+    }
+
+    function getActiveProject() {
+      return state.projects.find(p => p.id === state.activeProjectId) || null;
+    }
+
+    function setActiveProject(id) {
+      if (!state.projects.some(p => p.id === id)) return;
+      state.activeProjectId = id;
+      saveState();
+      renderAll();
+    }
+
+    function deleteProject(id) {
+      const idx = state.projects.findIndex(p => p.id === id);
+      if (idx === -1) return;
+      const wasActive = state.activeProjectId === id;
+      state.projects.splice(idx, 1);
+      if (wasActive) {
+        state.activeProjectId = state.projects[0]?.id || "";
+      }
+      saveState();
+      renderAll();
+    }
+
+    function renameProject(id, newName) {
+      const p = state.projects.find(x => x.id === id);
+      if (!p) return;
+      p.name = (newName || "").trim() || "Untitled Project";
+      p.updatedAt = nowIso();
+      saveState();
+      renderAll();
+    }
+
+    /***********************
+     * Rendering
+     ***********************/
+    function renderProjectList() {
+      el.projectList.innerHTML = "";
+      if (state.projects.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "text-sm text-slate-400 px-2 py-3";
+        empty.textContent = "No projects yet. Click + New Project.";
+        el.projectList.appendChild(empty);
+        return;
+      }
+
+      for (const p of state.projects) {
+        const isActive = p.id === state.activeProjectId;
+
+        const row = document.createElement("div");
+        row.className =
+          "group flex items-center gap-2 rounded-xl px-2 py-2 cursor-pointer border " +
+          (isActive
+            ? "bg-slate-800/70 border-slate-700"
+            : "bg-slate-900/30 hover:bg-slate-800/40 border-slate-800");
+
+        const left = document.createElement("div");
+        left.className = "flex-1 min-w-0";
+        const title = document.createElement("div");
+        title.className = "text-sm font-semibold truncate";
+        title.textContent = p.name;
+        const meta = document.createElement("div");
+        meta.className = "text-xs text-slate-400 truncate";
+        const last = p.updatedAt ? new Date(p.updatedAt) : null;
+        meta.textContent = last ? `Updated ${last.toLocaleString()}` : "—";
+        left.appendChild(title);
+        left.appendChild(meta);
+
+        const actions = document.createElement("div");
+        actions.className = "flex items-center gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition";
+
+        const btnRename = document.createElement("button");
+        btnRename.className = "rounded-lg px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700 transition";
+        btnRename.textContent = "Rename";
+        btnRename.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const n = prompt("Rename project:", p.name);
+          if (n === null) return;
+          renameProject(p.id, n);
+        });
+
+        const btnDel = document.createElement("button");
+        btnDel.className = "rounded-lg px-2 py-1 text-xs bg-rose-700/70 hover:bg-rose-600 transition";
+        btnDel.textContent = "Delete";
+        btnDel.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (confirm(`Delete "${p.name}"? This cannot be undone.`)) {
+            deleteProject(p.id);
+          }
+        });
+
+        actions.appendChild(btnRename);
+        actions.appendChild(btnDel);
+
+        row.appendChild(left);
+        row.appendChild(actions);
+
+        row.addEventListener("click", () => setActiveProject(p.id));
+
+        el.projectList.appendChild(row);
+      }
+    }
+
+    function renderHeader() {
+      const p = getActiveProject();
+      if (!p) {
+        el.currentProjectTitle.textContent = "AI Website Builder";
+        el.currentProjectMeta.textContent = "Create a project to begin";
+        return;
+      }
+      el.currentProjectTitle.textContent = p.name;
+      el.currentProjectMeta.textContent = p.html
+        ? "Generated HTML ready"
+        : "No HTML yet — send a prompt to generate";
+    }
+
+    function renderChat() {
+      const p = getActiveProject();
+      el.chatLog.innerHTML = "";
+
+      if (!p) {
+        const msg = document.createElement("div");
+        msg.className = "text-sm text-slate-400";
+        msg.textContent = "Create a new project to start chatting.";
+        el.chatLog.appendChild(msg);
+        return;
+      }
+
+      for (const m of p.messages) {
+        const wrap = document.createElement("div");
+        const isUser = m.role === "user";
+        wrap.className = "flex " + (isUser ? "justify-end" : "justify-start");
+
+        const bubble = document.createElement("div");
+        bubble.className =
+          "max-w-[92%] rounded-2xl px-3 py-2 border shadow-sm " +
+          (isUser
+            ? "bg-blue-600/20 border-blue-500/30"
+            : "bg-slate-900/50 border-slate-800");
+
+        const role = document.createElement("div");
+        role.className = "text-[11px] uppercase tracking-wider text-slate-400 mb-1";
+        role.textContent = isUser ? "You" : "Assistant";
+
+        const content = document.createElement("div");
+        content.className = "text-sm leading-relaxed whitespace-pre-wrap break-words";
+        content.textContent = m.content;
+
+        bubble.appendChild(role);
+        bubble.appendChild(content);
+        wrap.appendChild(bubble);
+
+        el.chatLog.appendChild(wrap);
+      }
+
+      // Scroll to bottom
+      requestAnimationFrame(() => {
+        el.chatLog.scrollTop = el.chatLog.scrollHeight;
+      });
+    }
+
+    function renderOutput() {
+      const p = getActiveProject();
+      const html = p?.html ? ensureHtmlDoc(p.html) : "";
+
+      el.codeBlock.textContent = html || "<!-- No HTML yet. Send a prompt to generate. -->";
+
+      // Preview: use srcdoc for isolation
+      el.previewFrame.srcdoc = html || `
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Preview</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen flex items-center justify-center bg-slate-50">
+  <div class="max-w-md p-6 text-center">
+    <div class="text-2xl font-bold mb-2">No HTML yet</div>
+    <div class="text-slate-600">Send a prompt to generate <code class="font-mono">index.html</code>.</div>
+  </div>
+</body>
+</html>`;
+
+      // Mode switch
+      const mode = state.ui.mode;
+      if (mode === "preview") {
+        el.previewWrap.classList.remove("hidden");
+        el.codeWrap.classList.add("hidden");
+        el.modeLabel.textContent = "Preview";
+        el.btnModePreview.className = "px-3 py-1.5 rounded-lg text-sm font-semibold transition bg-slate-700 text-white";
+        el.btnModeCode.className = "px-3 py-1.5 rounded-lg text-sm font-semibold transition text-slate-300 hover:text-white";
+      } else {
+        el.previewWrap.classList.add("hidden");
+        el.codeWrap.classList.remove("hidden");
+        el.modeLabel.textContent = "Code";
+        el.btnModeCode.className = "px-3 py-1.5 rounded-lg text-sm font-semibold transition bg-slate-700 text-white";
+        el.btnModePreview.className = "px-3 py-1.5 rounded-lg text-sm font-semibold transition text-slate-300 hover:text-white";
+      }
+    }
+
+    function renderSettingsInputs() {
+      el.settingApiUrl.value = state.settings.apiUrl || DEFAULT_API_URL;
+      el.settingApiKey.value = state.settings.apiKey || "";
+      el.settingModelId.value = state.settings.modelId || DEFAULT_MODEL_ID;
+    }
+
+    function renderAll() {
+      renderProjectList();
+      renderHeader();
+      renderChat();
+      renderOutput();
+      el.tokenHint.textContent = "";
+    }
+
+    /***********************
+     * Settings Modal
+     ***********************/
+    function openSettings() {
+      renderSettingsInputs();
+      el.settingsModal.classList.remove("hidden");
+      // focus first field
+      setTimeout(() => el.settingApiUrl.focus(), 0);
+    }
+
+    function closeSettings() {
+      el.settingsModal.classList.add("hidden");
+    }
+
+    function saveSettingsFromModal() {
+      const apiUrl = (el.settingApiUrl.value || "").trim() || DEFAULT_API_URL;
+      const apiKey = (el.settingApiKey.value || "").trim();
+      const modelId = (el.settingModelId.value || "").trim() || DEFAULT_MODEL_ID;
+
+      // CRITICAL FIX #1: default is OpenRouter; user can edit, but we must initialize default exactly
+      state.settings.apiUrl = apiUrl;
+      state.settings.apiKey = apiKey;
+      state.settings.modelId = modelId;
+
+      saveState();
+      closeSettings();
+    }
+
+    function resetSettingsDefaults() {
+      el.settingApiUrl.value = DEFAULT_API_URL;
+      el.settingApiKey.value = "";
+      el.settingModelId.value = DEFAULT_MODEL_ID;
+    }
+
+    /***********************
+     * API Call
+     ***********************/
+    async function callChatCompletion(messages) {
+      const { apiUrl, apiKey, modelId } = state.settings;
+
+      if (!apiUrl || !apiUrl.trim()) {
+        alert("Missing API URL. Open Settings and set it.");
+        throw new Error("Missing API URL");
+      }
+      if (!apiKey || !apiKey.trim()) {
+        alert("Missing API Key. Open Settings and set it.");
+        throw new Error("Missing API Key");
+      }
+      if (!modelId || !modelId.trim()) {
+        alert("Missing Model ID. Open Settings and set it.");
+        throw new Error("Missing Model ID");
+      }
+
+      const payload = {
+        model: modelId,
+        messages,
+        temperature: 0.2
+      };
+
+      const headers = {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+        // OpenRouter recommended headers (optional but helpful)
+        "HTTP-Referer": window.location.origin,
+        "X-Title": "AI Website Builder"
+      };
+
+      setStatus("working", "Calling API…");
+
+      let response;
+      try {
+        response = await fetch(apiUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload)
+        });
+      } catch (err) {
+        setStatus("error", "Network error");
+        alert("Network error: " + (err?.message || String(err)));
+        throw err;
+      }
+
+      /************************************
+       * CRITICAL FIX #2: Anti-Crash JSON
+       * - await response.text()
+       * - if !response.ok -> alert and STOP
+       * - only then JSON.parse(text)
+       ************************************/
+      const text = await response.text();
+      if (!response.ok) {
+        setStatus("error", "API error");
+        alert("API Error: " + text);
+        throw new Error("API Error: " + text);
+      }
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        setStatus("error", "Bad JSON");
+        alert("API Error: Invalid JSON response.\n\n" + text);
+        throw e;
+      }
+
+      setStatus("ok", "Done");
+      return data;
+    }
+
+    function extractAssistantContent(apiData) {
+      // OpenRouter follows OpenAI-compatible schema: choices[0].message.content
+      const content = apiData?.choices?.[0]?.message?.content;
+      if (typeof content === "string") return content;
+      // Some providers might return "text"
+      const alt = apiData?.choices?.[0]?.text;
+      if (typeof alt === "string") return alt;
+      return "";
+    }
+
+    /***********************
+     * Core Chat Flow
+     ***********************/
+    function buildApiMessages(project) {
+      const msgs = [];
+      msgs.push({ role: "system", content: SYSTEM_PROMPT });
+
+      // Add a compact project context to encourage consistent full-doc outputs
+      const hasExisting = !!(project.html && project.html.trim());
+      if (hasExisting) {
+        msgs.push({
+          role: "system",
+          content:
+            "You MUST return a complete updated index.html that incorporates requested changes. You are editing an existing file; keep unrelated parts intact unless asked."
+        });
+        msgs.push({
+          role: "user",
+          content:
+            "Here is the current index.html. Update it based on my next request. Output ONLY raw HTML:\n\n" + project.html
+        });
+      }
+
+      // Add last ~12 turns to keep context (but not explode tokens)
+      const recent = project.messages.slice(-12).map(m => ({ role: m.role, content: m.content }));
+      msgs.push(...recent);
+
+      return msgs;
+    }
+
+    async function sendUserMessage() {
+      const p = getActiveProject();
+      if (!p) {
+        createNewProject({ name: "Project 1" });
+      }
+      const project = getActiveProject();
+      if (!project) return;
+
+      const text = (el.userInput.value || "").trim();
+      if (!text) return;
+
+      project.messages.push({ role: "user", content: text, ts: nowIso() });
+      project.updatedAt = nowIso();
+      el.userInput.value = "";
+      el.userInput.style.height = ""; // reset autoresize
+      saveState();
+      renderAll();
+
+      // Build API messages
+      const apiMessages = buildApiMessages(project);
+
+      let apiData;
+      try {
+        apiData = await callChatCompletion(apiMessages);
+      } catch (e) {
+        // already alerted
+        setStatus("error", "Failed");
+        return;
+      }
+
+      const assistantRaw = extractAssistantContent(apiData);
+      const cleaned = ensureHtmlDoc(stripMarkdownFences(assistantRaw));
+
+      if (!cleaned.trim()) {
+        project.messages.push({
+          role: "assistant",
+          content: "I didn't receive any HTML. Try again with more detail.",
+          ts: nowIso()
+        });
+        project.updatedAt = nowIso();
+        saveState();
+        renderAll();
+        return;
+      }
+
+      // Save HTML and assistant message
+      project.html = cleaned;
+      project.messages.push({
+        role: "assistant",
+        content: "✅ Generated updated index.html (see Output).",
+        ts: nowIso()
+      });
+      project.updatedAt = nowIso();
+      saveState();
+      renderAll();
+    }
+
+    /***********************
+     * Footer Textarea UX
+     ***********************/
+    function autoResizeTextarea() {
+      const ta = el.userInput;
+      ta.style.height = "auto";
+      // Cap height to avoid taking over screen
+      const max = Math.floor(window.innerHeight * 0.28);
+      ta.style.height = Math.min(ta.scrollHeight, max) + "px";
+    }
+
+    function approxTokenCount(s) {
+      // Very rough heuristic: ~4 chars per token in English
+      const t = String(s || "");
+      return Math.max(1, Math.round(t.length / 4));
+    }
+
+    /***********************
+     * Events
+     ***********************/
+    el.btnNewProject.addEventListener("click", () => {
+      createNewProject({ name: `Project ${state.projects.length + 1}` });
+    });
+
+    el.btnOpenSettings.addEventListener("click", openSettings);
+    el.btnCloseSettings.addEventListener("click", closeSettings);
+    el.btnCancelSettings.addEventListener("click", closeSettings);
+
+    el.settingsModal.addEventListener("click", (e) => {
+      // click outside closes
+      if (e.target === el.settingsModal.firstElementChild) closeSettings();
+    });
+
+    el.btnSaveSettings.addEventListener("click", saveSettingsFromModal);
+    el.btnResetSettings.addEventListener("click", resetSettingsDefaults);
+
+    el.btnModePreview.addEventListener("click", () => {
+      state.ui.mode = "preview";
+      saveState();
+      renderOutput();
+    });
+
+    el.btnModeCode.addEventListener("click", () => {
+      state.ui.mode = "code";
+      saveState();
+      renderOutput();
+    });
+
+    el.btnDownload.addEventListener("click", () => {
+      const p = getActiveProject();
+      const html = p?.html ? ensureHtmlDoc(p.html) : "";
+      if (!html.trim()) {
+        alert("Nothing to download yet. Generate HTML first.");
+        return;
+      }
+      downloadText("index.html", html);
+    });
+
+    el.btnSend.addEventListener("click", () => {
+      sendUserMessage();
+    });
+
+    el.userInput.addEventListener("input", () => {
+      autoResizeTextarea();
+      const t = el.userInput.value || "";
+      el.tokenHint.textContent = t.trim()
+        ? `~${approxTokenCount(t)} tokens`
+        : "";
+    });
+
+    el.userInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendUserMessage();
+      }
+    });
+
+    // Keyboard shortcut: Cmd/Ctrl+K to open settings
+    window.addEventListener("keydown", (e) => {
+      const isMac = navigator.platform.toLowerCase().includes("mac");
+      const mod = isMac ? e.metaKey : e.ctrlKey;
+      if (mod && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        openSettings();
+      }
+      if (e.key === "Escape") {
+        if (!el.settingsModal.classList.contains("hidden")) closeSettings();
+      }
+    });
+
+    // Ensure active project exists
+    function ensureBootProject() {
+      if (state.projects.length === 0) {
+        createNewProject({ name: "Project 1" });
+        // createNewProject saves+renders already
+        return;
+      }
+      if (!state.activeProjectId || !state.projects.some(p => p.id === state.activeProjectId)) {
+        state.activeProjectId = state.projects[0].id;
+        saveState();
+      }
+    }
+
+    /***********************
+     * Init
+     ***********************/
+    (function init() {
+      const loaded = loadState();
+      if (!loaded) saveState();
+
+      // Enforce defaults if missing (but do not overwrite user-changed values)
+      if (!state.settings.apiUrl) state.settings.apiUrl = DEFAULT_API_URL;
+      if (!state.settings.modelId) state.settings.modelId = DEFAULT_MODEL_ID;
+
+      ensureBootProject();
+      renderAll();
+      setStatus("idle", "Idle");
+
+      // Initial textarea sizing
+      autoResizeTextarea();
+    })();
+  </script>
+</body>
+</html>
